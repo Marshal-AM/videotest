@@ -1,17 +1,40 @@
 #!/bin/bash
 # Setup script for installing Chrome/Chromium on Vast AI
 
-echo "Installing Chromium browser..."
+echo "Installing Chromium browser and dependencies..."
 
 # Update package list
 apt-get update
 
-# Install Chromium and dependencies
-apt-get install -y chromium-browser chromium-chromedriver
+# Install Chromium, chromedriver, and required dependencies
+apt-get install -y \
+    chromium-browser \
+    chromium-chromedriver \
+    libnss3 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2
+
+# Make chromedriver executable if it exists
+if [ -f /usr/bin/chromedriver ]; then
+    chmod +x /usr/bin/chromedriver
+    echo "Made chromedriver executable"
+fi
 
 # Verify installation
 if command -v chromium-browser &> /dev/null; then
     echo "Chromium installed successfully at: $(which chromium-browser)"
+    if command -v chromedriver &> /dev/null; then
+        echo "Chromedriver found at: $(which chromedriver)"
+    else
+        echo "Warning: chromedriver not found in PATH, but may be installed"
+    fi
 else
     echo "Chromium installation failed. Trying alternative method..."
     
