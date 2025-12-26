@@ -311,7 +311,7 @@ class SendBrowserApp:
                 
                 # Convert to bytes and send
                 image_bytes = image.tobytes()
-            self.__camera.write_frame(image_bytes)
+                self.__camera.write_frame(image_bytes)
                 
             except Exception as e:
                 print(f"Error capturing frame: {e}")
