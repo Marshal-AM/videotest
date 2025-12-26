@@ -11,6 +11,7 @@ import threading
 import io
 import sys
 import shutil
+import subprocess
 
 from daily import *
 from PIL import Image
@@ -57,40 +58,53 @@ class SendBrowserApp:
         else:
             print("Warning: Chrome/Chromium not found in PATH. Trying default locations...")
         
-        # Try to find system chromedriver first (matches installed Chrome/Chromium)
-        chromedriver_paths = [
-            shutil.which("chromedriver"),
-            "/usr/bin/chromedriver",
-            "/usr/lib/chromium-browser/chromedriver",
-            "/snap/chromium/current/usr/lib/chromium-browser/chromedriver",
-        ]
-        chromedriver_binary = next((path for path in chromedriver_paths if path), None)
-        
+        # Use webdriver-manager to automatically download matching chromedriver
+        # This avoids version mismatch issues with system chromedriver
+        print("Setting up Chrome driver with webdriver-manager...")
         try:
-            if chromedriver_binary:
-                print(f"Using system chromedriver: {chromedriver_binary}")
-                service = Service(chromedriver_binary)
-                self.__driver = webdriver.Chrome(service=service, options=chrome_options)
-            else:
-                # Fall back to webdriver-manager
-                print("System chromedriver not found, using webdriver-manager...")
-                service = Service(ChromeDriverManager().install())
-                self.__driver = webdriver.Chrome(service=service, options=chrome_options)
+            # Get Chrome version for diagnostics
+            if chrome_binary:
+                try:
+                    chrome_version_output = subprocess.run(
+                        [chrome_binary, "--version"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if chrome_version_output.returncode == 0:
+                        print(f"Chrome version: {chrome_version_output.stdout.strip()}")
+                except:
+                    pass
             
+            # Use webdriver-manager to get matching chromedriver
+            chromedriver_path = ChromeDriverManager().install()
+            print(f"Using chromedriver: {chromedriver_path}")
+            
+            # Create service with additional options for better compatibility
+            service = Service(chromedriver_path)
+            service.service_args = ['--verbose', '--log-path=/tmp/chromedriver.log']
+            
+            self.__driver = webdriver.Chrome(service=service, options=chrome_options)
             self.__driver.set_window_size(width, height)
             print("Chrome driver initialized successfully")
+            
         except Exception as e:
             print(f"\nError initializing Chrome driver: {e}")
-            print("\nTrying to install missing dependencies...")
-            print("Run these commands to fix:")
-            print("\n1. Install Chromium and chromedriver:")
-            print("   apt-get update && apt-get install -y chromium-browser chromium-chromedriver")
-            print("\n2. If chromedriver is missing dependencies, install them:")
+            print("\nTroubleshooting steps:")
+            if chrome_binary:
+                print("\n1. Check if Chrome/Chromium is working:")
+                print(f"   {chrome_binary} --version")
+            else:
+                print("\n1. Chrome/Chromium not found. Install it first:")
+                print("   apt-get update && apt-get install -y chromium-browser")
+            print("\n2. Install/update dependencies:")
+            print("   apt-get update && apt-get install -y chromium-browser")
             print("   apt-get install -y libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2")
-            print("\n3. Make chromedriver executable:")
-            print("   chmod +x /usr/bin/chromedriver")
-            print("\n4. Then reinstall webdriver-manager:")
+            print("\n3. Clear webdriver-manager cache and reinstall:")
+            print("   rm -rf ~/.wdm")
             print("   pip install --upgrade webdriver-manager")
+            print("\n4. Check chromedriver log for details:")
+            print("   cat /tmp/chromedriver.log")
             sys.exit(1)
         
         if url:
