@@ -1,25 +1,95 @@
 #
-# This demo will join a Daily meeting and send a given image at the specified
-# framerate using a virtual camera device.
+# This demo will join a Daily meeting and stream live Chrome browser frames
+# at the specified framerate using a virtual camera device.
 #
-# Usage: python3 videotest.py -m MEETING_URL -i IMAGE -f FRAME_RATE
+# Usage: python3 videotest.py -m MEETING_URL -u URL -f FRAME_RATE
 #
 
 import argparse
 import time
 import threading
+import io
+import sys
+import shutil
 
 from daily import *
 from PIL import Image
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
 
-class SendImageApp:
-    def __init__(self, image_file, framerate):
-        self.__image = Image.open(image_file)
+class SendBrowserApp:
+    def __init__(self, url, framerate, width=1920, height=1080):
+        self.__url = url
         self.__framerate = framerate
+        self.__width = width
+        self.__height = height
 
+        # Set up Chrome with Selenium
+        chrome_options = Options()
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument(f"--window-size={width},{height}")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-software-rasterizer")
+        chrome_options.add_argument("--disable-extensions")
+        # Run in headless mode for Vast AI
+        chrome_options.add_argument("--headless=new")
+        
+        # Check if Chrome/Chromium is installed
+        chrome_paths = [
+            shutil.which("google-chrome"),
+            shutil.which("google-chrome-stable"),
+            shutil.which("chromium"),
+            shutil.which("chromium-browser"),
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+        ]
+        chrome_binary = next((path for path in chrome_paths if path), None)
+        
+        if chrome_binary:
+            chrome_options.binary_location = chrome_binary
+            print(f"Using Chrome binary: {chrome_binary}")
+        else:
+            print("Warning: Chrome/Chromium not found in PATH. Trying default locations...")
+        
+        try:
+            # Use webdriver-manager to automatically handle chromedriver
+            print("Setting up Chrome driver...")
+            service = Service(ChromeDriverManager().install())
+            self.__driver = webdriver.Chrome(service=service, options=chrome_options)
+            self.__driver.set_window_size(width, height)
+            print("Chrome driver initialized successfully")
+        except Exception as e:
+            print(f"\nError initializing Chrome driver: {e}")
+            print("\nTo fix this, install Chrome or Chromium:")
+            print("\nFor Google Chrome:")
+            print("  wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -")
+            print("  echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' > /etc/apt/sources.list.d/google-chrome.list")
+            print("  apt-get update && apt-get install -y google-chrome-stable")
+            print("\nFor Chromium (simpler):")
+            print("  apt-get update && apt-get install -y chromium-browser")
+            print("\nThen reinstall webdriver-manager:")
+            print("  pip install --upgrade webdriver-manager")
+            sys.exit(1)
+        
+        if url:
+            print(f"Opening URL: {url}")
+            self.__driver.get(url)
+        else:
+            print("Opening blank page")
+            self.__driver.get("about:blank")
+        
+        # Give browser time to load
+        time.sleep(2)
+
+        # Create camera device with browser dimensions
         self.__camera = Daily.create_camera_device(
-            "my-camera", width=self.__image.width, height=self.__image.height, color_format="RGB"
+            "my-camera", width=width, height=height, color_format="RGB"
         )
 
         self.__client = CallClient()
@@ -32,7 +102,7 @@ class SendImageApp:
         self.__app_error = None
 
         self.__start_event = threading.Event()
-        self.__thread = threading.Thread(target=self.send_image)
+        self.__thread = threading.Thread(target=self.send_frames)
         self.__thread.start()
 
     def on_joined(self, data, error):
@@ -57,34 +127,58 @@ class SendImageApp:
     def leave(self):
         self.__app_quit = True
         self.__thread.join()
+        if self.__driver:
+            self.__driver.quit()
         self.__client.leave()
         self.__client.release()
 
-    def send_image(self):
+    def send_frames(self):
         self.__start_event.wait()
 
         if self.__app_error:
-            print(f"Unable to send audio!")
+            print(f"Unable to send frames!")
             return
 
         sleep_time = 1.0 / self.__framerate
-        image_bytes = self.__image.tobytes()
 
         while not self.__app_quit:
-            self.__camera.write_frame(image_bytes)
+            try:
+                # Capture screenshot from browser
+                screenshot = self.__driver.get_screenshot_as_png()
+                
+                # Convert to PIL Image
+                image = Image.open(io.BytesIO(screenshot))
+                
+                # Resize if needed to match camera dimensions
+                if image.size != (self.__width, self.__height):
+                    image = image.resize((self.__width, self.__height), Image.Resampling.LANCZOS)
+                
+                # Convert to RGB if needed
+                if image.mode != "RGB":
+                    image = image.convert("RGB")
+                
+                # Convert to bytes and send
+                image_bytes = image.tobytes()
+                self.__camera.write_frame(image_bytes)
+                
+            except Exception as e:
+                print(f"Error capturing frame: {e}")
+            
             time.sleep(sleep_time)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-m", "--meeting", required=True, help="Meeting URL")
-    parser.add_argument("-i", "--image", required=True, help="Image to send")
-    parser.add_argument("-f", "--framerate", type=int, required=True, help="Framerate")
+    parser.add_argument("-m", "--meeting", required=True, help="Daily meeting URL")
+    parser.add_argument("-u", "--url", default="", help="URL to open in browser (default: blank page)")
+    parser.add_argument("-f", "--framerate", type=int, default=30, help="Framerate (default: 30)")
+    parser.add_argument("--width", type=int, default=1920, help="Browser width (default: 1920)")
+    parser.add_argument("--height", type=int, default=1080, help="Browser height (default: 1080)")
     args = parser.parse_args()
 
     Daily.init()
 
-    app = SendImageApp(args.image, args.framerate)
+    app = SendBrowserApp(args.url, args.framerate, args.width, args.height)
 
     try:
         app.run(args.meeting)
