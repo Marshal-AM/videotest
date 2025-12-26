@@ -8,15 +8,16 @@ apt-get update
 
 # Install Chromium, chromedriver, and ALL required dependencies
 # These are needed for both Chromium and chromedriver to work
+# Note: Ubuntu 24.04 uses t64 suffix for some packages
 apt-get install -y \
     chromium-browser \
     chromium-chromedriver \
     libnss3 \
     libnss3-dev \
     libnspr4 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libatspi2.0-0 \
+    libatk-bridge2.0-0t64 \
+    libatk1.0-0t64 \
+    libatspi2.0-0t64 \
     libdrm2 \
     libxkbcommon0 \
     libxcomposite1 \
@@ -24,9 +25,9 @@ apt-get install -y \
     libxfixes3 \
     libxrandr2 \
     libgbm1 \
-    libasound2 \
+    libasound2t64 \
     libxss1 \
-    libgtk-3-0 \
+    libgtk-3-0t64 \
     libgdk-pixbuf2.0-0 \
     libxshmfence1 \
     libgl1
