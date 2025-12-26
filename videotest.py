@@ -59,17 +59,20 @@ class SendBrowserApp:
         chrome_options.add_argument("--output=/dev/null")
         
         # Check if Chrome/Chromium is installed
+        # Check for snap-installed Chromium first (common on Ubuntu)
         chrome_paths = [
+            "/snap/chromium/current/usr/lib/chromium-browser/chromium-browser",
+            "/snap/bin/chromium",
+            shutil.which("chromium"),
             shutil.which("google-chrome"),
             shutil.which("google-chrome-stable"),
-            shutil.which("chromium"),
             shutil.which("chromium-browser"),
             "/usr/bin/google-chrome",
             "/usr/bin/google-chrome-stable",
             "/usr/bin/chromium",
             "/usr/bin/chromium-browser",
         ]
-        chrome_binary = next((path for path in chrome_paths if path), None)
+        chrome_binary = next((path for path in chrome_paths if os.path.exists(path)), None)
         
         if chrome_binary:
             chrome_options.binary_location = chrome_binary
