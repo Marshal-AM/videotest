@@ -72,7 +72,8 @@ class SendBrowserApp:
             "/usr/bin/chromium",
             "/usr/bin/chromium-browser",
         ]
-        chrome_binary = next((path for path in chrome_paths if os.path.exists(path)), None)
+        # Filter out None values and check if paths exist
+        chrome_binary = next((path for path in chrome_paths if path and os.path.exists(path)), None)
         
         if chrome_binary:
             chrome_options.binary_location = chrome_binary
