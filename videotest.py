@@ -57,24 +57,40 @@ class SendBrowserApp:
         else:
             print("Warning: Chrome/Chromium not found in PATH. Trying default locations...")
         
+        # Try to find system chromedriver first (matches installed Chrome/Chromium)
+        chromedriver_paths = [
+            shutil.which("chromedriver"),
+            "/usr/bin/chromedriver",
+            "/usr/lib/chromium-browser/chromedriver",
+            "/snap/chromium/current/usr/lib/chromium-browser/chromedriver",
+        ]
+        chromedriver_binary = next((path for path in chromedriver_paths if path), None)
+        
         try:
-            # Use webdriver-manager to automatically handle chromedriver
-            print("Setting up Chrome driver...")
-            service = Service(ChromeDriverManager().install())
-            self.__driver = webdriver.Chrome(service=service, options=chrome_options)
+            if chromedriver_binary:
+                print(f"Using system chromedriver: {chromedriver_binary}")
+                service = Service(chromedriver_binary)
+                self.__driver = webdriver.Chrome(service=service, options=chrome_options)
+            else:
+                # Fall back to webdriver-manager
+                print("System chromedriver not found, using webdriver-manager...")
+                service = Service(ChromeDriverManager().install())
+                self.__driver = webdriver.Chrome(service=service, options=chrome_options)
+            
             self.__driver.set_window_size(width, height)
             print("Chrome driver initialized successfully")
         except Exception as e:
             print(f"\nError initializing Chrome driver: {e}")
-            print("\nTo fix this, install Chrome or Chromium:")
-            print("\nFor Google Chrome:")
-            print("  wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -")
-            print("  echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' > /etc/apt/sources.list.d/google-chrome.list")
-            print("  apt-get update && apt-get install -y google-chrome-stable")
-            print("\nFor Chromium (simpler):")
-            print("  apt-get update && apt-get install -y chromium-browser")
-            print("\nThen reinstall webdriver-manager:")
-            print("  pip install --upgrade webdriver-manager")
+            print("\nTrying to install missing dependencies...")
+            print("Run these commands to fix:")
+            print("\n1. Install Chromium and chromedriver:")
+            print("   apt-get update && apt-get install -y chromium-browser chromium-chromedriver")
+            print("\n2. If chromedriver is missing dependencies, install them:")
+            print("   apt-get install -y libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2")
+            print("\n3. Make chromedriver executable:")
+            print("   chmod +x /usr/bin/chromedriver")
+            print("\n4. Then reinstall webdriver-manager:")
+            print("   pip install --upgrade webdriver-manager")
             sys.exit(1)
         
         if url:
