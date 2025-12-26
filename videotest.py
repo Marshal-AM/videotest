@@ -12,6 +12,9 @@ import io
 import sys
 import shutil
 import subprocess
+import os
+import tempfile
+import glob
 
 from daily import *
 from PIL import Image
@@ -80,9 +83,34 @@ class SendBrowserApp:
             chromedriver_path = ChromeDriverManager().install()
             print(f"Using chromedriver: {chromedriver_path}")
             
-            # Create service with additional options for better compatibility
-            service = Service(chromedriver_path)
-            service.service_args = ['--verbose', '--log-path=/tmp/chromedriver.log']
+            # Verify chromedriver is executable and check for missing libraries
+            if not os.access(chromedriver_path, os.X_OK):
+                os.chmod(chromedriver_path, 0o755)
+                print("Made chromedriver executable")
+            
+            # Test if chromedriver can run (check for missing libraries)
+            print("Testing chromedriver...")
+            test_result = subprocess.run(
+                [chromedriver_path, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if test_result.returncode != 0:
+                print(f"ERROR: chromedriver cannot run!")
+                print(f"stderr: {test_result.stderr}")
+                print(f"stdout: {test_result.stdout}")
+                print("\nThis usually means missing shared libraries.")
+                print("Run this to check missing libraries:")
+                print(f"  ldd {chromedriver_path}")
+                raise Exception("chromedriver failed to start - missing dependencies")
+            else:
+                print(f"Chromedriver test passed: {test_result.stdout.strip()}")
+            
+            # Create service with log file for debugging
+            log_file = tempfile.NamedTemporaryFile(delete=False, suffix='.log', prefix='chromedriver_')
+            log_file.close()
+            service = Service(chromedriver_path, log_path=log_file.name)
             
             self.__driver = webdriver.Chrome(service=service, options=chrome_options)
             self.__driver.set_window_size(width, height)
@@ -90,6 +118,51 @@ class SendBrowserApp:
             
         except Exception as e:
             print(f"\nError initializing Chrome driver: {e}")
+            
+            # Try to read the log file if it exists
+            log_file_path = None
+            try:
+                if 'log_file' in locals():
+                    log_file_path = log_file.name
+                elif 'chromedriver_path' in locals():
+                    # Try to find log file in temp directory
+                    temp_logs = glob.glob('/tmp/chromedriver_*.log')
+                    if temp_logs:
+                        log_file_path = temp_logs[-1]  # Get most recent
+                
+                if log_file_path and os.path.exists(log_file_path):
+                    print(f"\nChromedriver log ({log_file_path}):")
+                    with open(log_file_path, 'r') as f:
+                        log_content = f.read()
+                        if log_content:
+                            print(log_content)
+                        else:
+                            print("(log file is empty)")
+            except Exception as ex:
+                print(f"Could not read log file: {ex}")
+            
+            # Check what libraries chromedriver needs
+            if 'chromedriver_path' in locals():
+                print("\nChecking chromedriver dependencies...")
+                try:
+                    ldd_result = subprocess.run(
+                        ["ldd", chromedriver_path],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if ldd_result.returncode == 0:
+                        missing_libs = [line for line in ldd_result.stdout.split('\n') if 'not found' in line]
+                        if missing_libs:
+                            print("Missing libraries detected:")
+                            for lib in missing_libs:
+                                print(f"  {lib.strip()}")
+                        else:
+                            print("All libraries found. Try running chromedriver directly:")
+                            print(f"  {chromedriver_path} --version")
+                except Exception as ex:
+                    print(f"Could not check dependencies: {ex}")
+            
             print("\nTroubleshooting steps:")
             if chrome_binary:
                 print("\n1. Check if Chrome/Chromium is working:")
@@ -97,14 +170,17 @@ class SendBrowserApp:
             else:
                 print("\n1. Chrome/Chromium not found. Install it first:")
                 print("   apt-get update && apt-get install -y chromium-browser")
-            print("\n2. Install/update dependencies:")
-            print("   apt-get update && apt-get install -y chromium-browser")
-            print("   apt-get install -y libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2")
-            print("\n3. Clear webdriver-manager cache and reinstall:")
+            print("\n2. Install ALL required dependencies:")
+            print("   apt-get update && apt-get install -y \\")
+            print("     chromium-browser \\")
+            print("     libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 \\")
+            print("     libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \\")
+            print("     libgbm1 libasound2 libxss1 libgtk-3-0")
+            print("\n3. Check chromedriver dependencies:")
+            print(f"   ldd {chromedriver_path}")
+            print("\n4. Clear webdriver-manager cache and reinstall:")
             print("   rm -rf ~/.wdm")
             print("   pip install --upgrade webdriver-manager")
-            print("\n4. Check chromedriver log for details:")
-            print("   cat /tmp/chromedriver.log")
             sys.exit(1)
         
         if url:
