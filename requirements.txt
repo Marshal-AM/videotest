@@ -1,2 +1,4 @@
 daily-python
 Pillow
+selenium
+webdriver-manager
