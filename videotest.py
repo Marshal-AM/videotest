@@ -33,14 +33,30 @@ class SendBrowserApp:
 
         # Set up Chrome with Selenium
         chrome_options = Options()
+        # Essential flags for headless/server environments
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument(f"--window-size={width},{height}")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-software-rasterizer")
         chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-setuid-sandbox")
+        chrome_options.add_argument("--disable-web-security")
+        chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+        chrome_options.add_argument(f"--window-size={width},{height}")
         # Run in headless mode for Vast AI
         chrome_options.add_argument("--headless=new")
+        # Additional stability flags for server environments
+        chrome_options.add_argument("--disable-background-networking")
+        chrome_options.add_argument("--disable-background-timer-throttling")
+        chrome_options.add_argument("--disable-renderer-backgrounding")
+        chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+        chrome_options.add_argument("--disable-ipc-flooding-protection")
+        # Try to avoid crashes
+        chrome_options.add_argument("--disable-crash-reporter")
+        chrome_options.add_argument("--disable-in-process-stack-traces")
+        chrome_options.add_argument("--disable-logging")
+        chrome_options.add_argument("--log-level=3")
+        chrome_options.add_argument("--output=/dev/null")
         
         # Check if Chrome/Chromium is installed
         chrome_paths = [
@@ -107,11 +123,29 @@ class SendBrowserApp:
             else:
                 print(f"Chromedriver test passed: {test_result.stdout.strip()}")
             
+            # Test if Chrome can start with these options
+            if chrome_binary:
+                print("Testing Chrome startup...")
+                test_chrome_result = subprocess.run(
+                    [chrome_binary, "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--version"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if test_chrome_result.returncode != 0:
+                    print(f"Warning: Chrome test failed!")
+                    print(f"stderr: {test_chrome_result.stderr}")
+                    print(f"stdout: {test_chrome_result.stdout}")
+                    print("Chrome may need additional dependencies or a virtual display.")
+                else:
+                    print(f"Chrome test passed: {test_chrome_result.stdout.strip()}")
+            
             # Create service with log file for debugging
             log_file = tempfile.NamedTemporaryFile(delete=False, suffix='.log', prefix='chromedriver_')
             log_file.close()
             service = Service(chromedriver_path, log_path=log_file.name)
             
+            print("Starting Chrome browser...")
             self.__driver = webdriver.Chrome(service=service, options=chrome_options)
             self.__driver.set_window_size(width, height)
             print("Chrome driver initialized successfully")
