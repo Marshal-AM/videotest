@@ -221,15 +221,23 @@ class SendBrowserApp:
             print("   pip install --upgrade webdriver-manager")
             sys.exit(1)
         
+        # Navigate to URL
         if url:
             print(f"Opening URL: {url}")
-            self.__driver.get(url)
+            try:
+                self.__driver.get(url)
+                print(f"Page loaded: {self.__driver.title}")
+            except Exception as e:
+                print(f"Warning: Error loading URL: {e}")
+                print("Trying to continue anyway...")
         else:
             print("Opening blank page")
             self.__driver.get("about:blank")
         
-        # Give browser time to load
-        time.sleep(2)
+        # Give browser time to load and render
+        print("Waiting for page to render...")
+        time.sleep(3)
+        print("Browser ready, starting to stream frames...")
 
         # Create camera device with browser dimensions
         self.__camera = Daily.create_camera_device(
@@ -303,7 +311,7 @@ class SendBrowserApp:
                 
                 # Convert to bytes and send
                 image_bytes = image.tobytes()
-                self.__camera.write_frame(image_bytes)
+            self.__camera.write_frame(image_bytes)
                 
             except Exception as e:
                 print(f"Error capturing frame: {e}")
@@ -314,7 +322,7 @@ class SendBrowserApp:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--meeting", required=True, help="Daily meeting URL")
-    parser.add_argument("-u", "--url", default="", help="URL to open in browser (default: blank page)")
+    parser.add_argument("-u", "--url", default="https://www.apple.com", help="URL to open in browser (default: https://www.apple.com)")
     parser.add_argument("-f", "--framerate", type=int, default=30, help="Framerate (default: 30)")
     parser.add_argument("--width", type=int, default=1920, help="Browser width (default: 1920)")
     parser.add_argument("--height", type=int, default=1080, help="Browser height (default: 1080)")
