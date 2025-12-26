@@ -6,12 +6,17 @@ echo "Installing Chromium browser and dependencies..."
 # Update package list
 apt-get update
 
-# Install Chromium, chromedriver, and required dependencies
+# Install Chromium, chromedriver, and ALL required dependencies
+# These are needed for both Chromium and chromedriver to work
 apt-get install -y \
     chromium-browser \
     chromium-chromedriver \
     libnss3 \
+    libnss3-dev \
+    libnspr4 \
     libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libatspi2.0-0 \
     libdrm2 \
     libxkbcommon0 \
     libxcomposite1 \
@@ -19,7 +24,12 @@ apt-get install -y \
     libxfixes3 \
     libxrandr2 \
     libgbm1 \
-    libasound2
+    libasound2 \
+    libxss1 \
+    libgtk-3-0 \
+    libgdk-pixbuf2.0-0 \
+    libxshmfence1 \
+    libgl1
 
 # Make chromedriver executable if it exists
 if [ -f /usr/bin/chromedriver ]; then
